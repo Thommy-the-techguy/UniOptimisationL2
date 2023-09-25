@@ -1,4 +1,4 @@
-package gui;
+package com.tomomoto.gui;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -9,12 +9,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MainForm extends JFrame {
     private JTable matrixTable;
     private JScrollPane scrollPane;
     private JButton readFromFileButton;
-    private JButton buildGraphButton;
+    private JButton findPathButton;
     private final Path pathToMatrixFile = Path.of("src", "main", "resources", "matrix.txt");
     private int[][] matrix = new int[6][6];
 
@@ -36,22 +38,7 @@ public class MainForm extends JFrame {
         initializeMatrixTable();
         initializeScrollPane();
         initializeReadFromFileButton();
-        initializeBuildGraphButton();
-    }
-
-    private void initializeBuildGraphButton() {
-        buildGraphButton = new JButton("Построить");
-        buildGraphButton.setSize(100, 30);
-        buildGraphButton.setLocation(205, 230);
-        buildGraphButton.addActionListener(event -> {
-            this.setVisible(false);
-            try {
-                new Graph(this, getMapOfVertexes(), convertWeightsMatrixLinesToMap(readWeightsFromMatrixFile()));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
-        this.add(buildGraphButton);
+        initializeFindPathButton();
     }
 
     private Map<String, List<String>> getMapOfVertexes() {
@@ -86,6 +73,89 @@ public class MainForm extends JFrame {
             }
         });
         this.add(readFromFileButton);
+    }
+
+    private void initializeFindPathButton() {
+        findPathButton = new JButton("Найти путь");
+        findPathButton.setSize(100, 30);
+        findPathButton.setLocation(200, 230);
+        findPathButton.addActionListener((event) -> {
+            try {
+                new Graph(this, getMapOfVertexes(), convertWeightsMatrixLinesToMap(readWeightsFromMatrixFile()));
+                new ShortestPath(this, findShortestPath());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        this.add(findPathButton);
+    }
+
+    private List<String> findShortestPath() throws IOException {
+        Map<String, List<String>> weightsMatrixMap = convertWeightsMatrixLinesToMap(readWeightsFromMatrixFile());
+        Map<String, Integer> costs = new LinkedHashMap<>();
+        Map<String, String> parents = new LinkedHashMap<>();
+        List<String> processed = new ArrayList<>();
+
+        fillCostsMap(weightsMatrixMap, costs);
+        fillParentsMap(weightsMatrixMap, parents);
+
+        String node = findLowestCostNode(costs, processed);
+        while (!node.equals(getLastNode(weightsMatrixMap))) {
+            int cost = costs.get(node);
+            List<String> neighbors = weightsMatrixMap.get(node);
+            for (String neighbor : neighbors) {
+                int newCost = cost + Integer.parseInt(neighbor.split("-")[1]);
+                if (costs.get(neighbor.split("-")[0]) > newCost) {
+                    costs.put(neighbor.split("-")[0], newCost);
+                    parents.put(neighbor.split("-")[0], node);
+                }
+            }
+            processed.add(node);
+            node = findLowestCostNode(costs, processed);
+        }
+
+        List<String> resultPathReversed = new ArrayList<>();
+        String vertex = parents.keySet().stream().filter(item -> item.equals(getLastNode(weightsMatrixMap))).toList().get(0);
+        while (!vertex.equals("v1")) {
+            resultPathReversed.add(vertex);
+            vertex = parents.get(vertex);
+        }
+        resultPathReversed.add("v1");
+        System.out.println(resultPathReversed);
+        System.out.println(costs);
+        return resultPathReversed;
+    }
+
+    private String getLastNode(Map<String, List<String>> weightsMatrixMap) {
+        return String.format("v%d", weightsMatrixMap.size());
+    }
+
+    private String findLowestCostNode(Map<String, Integer> costs, List<String> processed) {
+        AtomicReference<String> lowestCostNode = new AtomicReference<>(null);
+        AtomicInteger lowestCost = new AtomicInteger(9999);
+        costs.forEach((key, value) -> {
+            if (value < lowestCost.get() && !processed.contains(key)) {
+                lowestCost.set(value);
+                lowestCostNode.set(key);
+            }
+        });
+        return lowestCostNode.get();
+    }
+
+    private void fillCostsMap(Map<String, List<String>> weightsMatrixMap, Map<String, Integer> costs) {
+        for (int i = 0; i < weightsMatrixMap.get("v1").size(); i++) {
+            costs.put(weightsMatrixMap.get("v1").get(i).split("-")[0], Integer.parseInt(weightsMatrixMap.get("v1").get(i).split("-")[1]));
+        }
+        for (int i = weightsMatrixMap.get("v1").size() + 1; i < weightsMatrixMap.size(); i++) {
+            costs.put((String) weightsMatrixMap.keySet().toArray()[i], 9999);
+        }
+    }
+
+    private void fillParentsMap(Map<String, List<String>> weightsMatrixMap, Map<String, String> parents) {
+        for (int i = 0; i < weightsMatrixMap.get("v1").size(); i++) {
+            parents.put(weightsMatrixMap.get("v1").get(i).split("-")[0], "v1");
+        }
+        parents.put("v6", "null");
     }
 
     private void initializeMatrixTable() {

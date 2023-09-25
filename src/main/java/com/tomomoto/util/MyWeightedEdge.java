@@ -1,4 +1,4 @@
-package util;
+package com.tomomoto.util;
 
 import org.jgrapht.graph.DefaultWeightedEdge;
 
